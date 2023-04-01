@@ -3,6 +3,9 @@ A frontend for the backup software [duplicity](https://gitlab.com/duplicity/dupl
 
 ⚠️ **Kyrian is still in development and lacks some functinality**
 
+![MainWindow](/screenshots/mw.jpg?raw=true "Main Window")
+
+
 # Installation
 
 ```
@@ -13,6 +16,8 @@ pip install .
 
 Execute `kyrian`.
 Source directory and target server (e.g. `file://my_local_folder, ftp://user@host/my_folder`) can be modified via the Settings Panel or by modifying `~/.config/kyrian/config.yaml`
+
+![SettingsWindow](/screenshots/settings.jpg?raw=true "Settings")
 
 ```
 Profile: Default
