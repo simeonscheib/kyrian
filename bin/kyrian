@@ -1,0 +1,132 @@
+#!/usr/bin/env python3
+
+import json
+import os
+import sys
+
+import yaml
+
+from kyrian.MainWindow import MainWindow
+
+from duplicity.dup_main import *
+import duplicity.errors
+
+from duplicity import gpg
+from duplicity import log
+from duplicity import tempdir
+from duplicity import util
+
+from PyQt6 import QtCore, QtGui, QtWidgets
+from PyQt6.QtCore import Qt
+from PyQt6 import uic
+
+from qt_material import apply_stylesheet
+
+standard_library.install_aliases()
+
+if sys.version_info[:2] >= (3, 7):
+    sys.stdout.reconfigure(errors=u'surrogateescape')
+    sys.stderr.reconfigure(errors=u'surrogateescape')
+elif sys.version_info.major == 3:
+    import codecs
+    sys.stdout = codecs.getwriter(u'utf-8')(sys.stdout.buffer, u'surrogateescape')
+    sys.stderr = codecs.getwriter(u'utf-8')(sys.stderr.buffer, u'surrogateescape')
+elif sys.version_info.major == 2:
+    import codecs
+    sys.stdout = codecs.getwriter(u'utf-8')(sys.stdout, u'replace')
+    sys.stderr = codecs.getwriter(u'utf-8')(sys.stderr, u'replace')
+
+
+def cleanUp():
+    log.shutdown()
+
+
+if __name__ == u"__main__":
+    try:
+
+        log.setup()
+        util.start_debugger()
+
+        # with_tempdir(alt_main, ["collection-status", "file://to"])
+
+        app = QtWidgets.QApplication(sys.argv)
+        apply_stylesheet(app, theme='dark_lightgreen.xml')
+
+        stylesheet = app.styleSheet()
+
+        add_style = """
+                    QDateEdit,
+                    QDateTimeEdit,
+                    QSpinBox,
+                    QDoubleSpinBox,
+                    QTreeView,
+                    QListView,
+                    QLineEdit,
+                    QComboBox {
+                    color: #8bc34a;
+                    }
+        """
+
+        app.setStyleSheet(stylesheet + add_style + ".treeclass::item {color: None;}")
+        window = MainWindow()
+        window.show()
+        app.aboutToQuit.connect(cleanUp)
+        
+        app.exec()
+    # Don't move this lower.  In order to get an exit
+    # status out of the system, you have to call the
+    # sys.exit() function.  Python handles this by
+    # raising the SystemExit exception.  Cleanup code
+    # goes here, if needed.
+    except SystemExit as e:
+        # No traceback, just get out
+        util.release_lockfile()
+        sys.exit(e.code)
+
+    except KeyboardInterrupt as e:
+        # No traceback, just get out
+        log.Info((u"INT intercepted...exiting."))
+        util.release_lockfile()
+        sys.exit(4)
+
+    except gpg.GPGError as e:
+        # For gpg errors, don't show an ugly stack trace by
+        # default. But do with sufficient verbosity.
+        util.release_lockfile()
+        log.Info((u"GPG error detail: %s")
+                 % util.exception_traceback())
+        log.FatalError(u"%s: %s" % (e.__class__.__name__, e.args[0]),
+                       log.ErrorCode.gpg_failed,
+                       e.__class__.__name__)
+
+    except duplicity.errors.UserError as e:
+        util.release_lockfile()
+        # For user errors, don't show an ugly stack trace by
+        # default. But do with sufficient verbosity.
+        log.Info(_(u"User error detail: %s")
+                 % util.exception_traceback())
+        log.FatalError(u"%s: %s" % (e.__class__.__name__, util.uexc(e)),
+                       log.ErrorCode.user_error,
+                       e.__class__.__name__)
+
+    except duplicity.errors.BackendException as e:
+        util.release_lockfile()
+        # For backend errors, don't show an ugly stack trace by
+        # default. But do with sufficient verbosity.
+        log.Info(_(u"Backend error detail: %s")
+                 % util.exception_traceback())
+        log.FatalError(u"%s: %s" % (e.__class__.__name__, util.uexc(e)),
+                       log.ErrorCode.user_error,
+                       e.__class__.__name__)
+
+    except Exception as e:
+        util.release_lockfile()
+        if u"Forced assertion for testing" in util.uexc(e):
+            log.FatalError(u"%s: %s" % (e.__class__.__name__, util.uexc(e)),
+                           log.ErrorCode.exception,
+                           e.__class__.__name__)
+        else:
+            # Traceback and that mess
+            log.FatalError(util.exception_traceback(),
+                           log.ErrorCode.exception,
+                           e.__class__.__name__)
