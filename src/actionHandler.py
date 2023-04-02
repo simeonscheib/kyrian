@@ -16,6 +16,7 @@ from duplicity import util
 from duplicity import commandline
 from duplicity import config
 from duplicity import dup_time
+from duplicity.progress import ProgressTracker
 
 from kyrian.config_helper import write_config, read_config
 
@@ -73,6 +74,9 @@ class actionHandler():
         if not os.path.exists(self.config_dir):
             os.makedirs(self.config_dir)
         
+
+        self.tracker = ProgressTracker()
+
         # Read config of create minimal config
         try:
             self.config = read_config(self.config_dir + "/config.yaml")
@@ -276,7 +280,7 @@ class actionHandler():
 
         with_tempdir_opts(self.take_action, args)
 
-    def do_backup(self, action):
+    def do_backup(self, action, tracker=None):
         """Adapted from https://gitlab.com/duplicity/duplicity
         """
 
@@ -403,11 +407,29 @@ class actionHandler():
                         log.ErrorCode.user_error)
 
             if action == u"full":
+                if self.tracker:
+                    # Fake a backup to compute total of moving bytes
+                    tarblock_iter = diffdir.DirFull(config.select)
+                    dummy_backup(tarblock_iter)
+                    # Store computed stats to compute progress later
+                    self.tracker.set_evidence(diffdir.stats, True)
+                    # Reinit the config.select iterator, so
+                    # the core of duplicity can rescan the paths
+                    commandline.set_selection()
                 full_backup(col_stats)
             else:  # attempt incremental
                 sig_chain = check_sig_chain(col_stats)
                 # action == "inc" was requested, but no full backup is available
                 if not sig_chain:
+                    if self.tracker:
+                        # Fake a backup to compute total of moving bytes
+                        tarblock_iter = diffdir.DirFull(config.select)
+                        dummy_backup(tarblock_iter)
+                        # Store computed stats to compute progress later
+                        self.tracker.set_evidence(diffdir.stats, True)
+                        # Reinit the config.select iterator, so
+                        # the core of duplicity can rescan the paths
+                        commandline.set_selection()
                     full_backup(col_stats)
                 else:
                     if not config.restart:
@@ -415,6 +437,17 @@ class actionHandler():
                         if col_stats.all_backup_chains:
                             config.gpg_profile.passphrase = get_passphrase(1, action)
                             check_last_manifest(col_stats)  # not needed for full backups
+                        
+                        if self.tracker:
+                            # Fake a backup to compute total of moving bytes
+                            tarblock_iter = diffdir.DirDelta(config.select,
+                                                            sig_chain.get_fileobjs())
+                            dummy_backup(tarblock_iter)
+                            # Store computed stats to compute progress later
+                            self.tracker.set_evidence(diffdir.stats, False)
+                            # Reinit the config.select iterator, so
+                            # the core of duplicity can rescan the paths
+                            commandline.set_selection()
                     incremental_backup(sig_chain)
         config.backend.close()
         if exit_val is not None:

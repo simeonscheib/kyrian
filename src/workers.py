@@ -6,6 +6,9 @@ from PyQt6.QtCore import Qt
 from duplicity import dup_time
 from duplicity import path
 from duplicity import config
+from duplicity import diffdir
+from duplicity import commandline
+from duplicity import log
 
 
 class BackupWorker(QtCore.QThread):
@@ -26,6 +29,160 @@ class BackupWorker(QtCore.QThread):
         self.handler.make_backup()
         self.safe = True
         self.backupReady.emit()
+
+
+class ProgressWorker(QtCore.QThread):
+
+    def __init__(self, handler, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+
+        self.handler = handler
+
+    sendProgress = QtCore.pyqtSignal(int)
+
+    def progress(self):
+        u"""
+        Aproximative and evolving method of computing the progress of upload
+        """
+        tracker = self.handler.tracker
+        if not tracker.has_collected_evidence():
+            return
+
+        current_time = datetime.now()
+        if tracker.start_time is None:
+            tracker.start_time = current_time
+        if tracker.last_time is not None:
+            elapsed = (current_time - tracker.last_time)
+        else:
+            elapsed = timedelta()
+        tracker.last_time = current_time
+
+        # Detect (and report) a stallment if no changing data for more than 5 seconds
+        if tracker.stall_last_time is None:
+            tracker.stall_last_time = current_time
+        if (current_time - tracker.stall_last_time).seconds > max(5, 2 * config.progress_rate):
+            log.TransferProgress(100.0 * tracker.progress_estimation,
+                                 tracker.time_estimation, tracker.total_bytecount,
+                                 (current_time - tracker.start_time).seconds,
+                                 tracker.speed,
+                                 True
+                                 )
+            return
+
+        tracker.nsteps += 1
+
+        u"""
+        Compute the ratio of information being written for deltas vs file sizes
+        Using Knuth algorithm to estimate approximate upper bound in % of completion
+        The progress is estimated on the current bytes written vs the total bytes to
+        change as estimated by a first-dry-run. The weight is the ratio of changing
+        data (Delta) against the total file sizes. (pessimistic estimation)
+        The method computes the upper bound for the progress, when using a sufficient
+        large volsize to accomodate and changes, as using a small volsize may inject
+        statistical noise.
+        """
+        changes = diffdir.stats.NewFileSize + diffdir.stats.ChangedFileSize
+        total_changes = tracker.total_stats.NewFileSize + tracker.total_stats.ChangedFileSize
+        if total_changes == 0 or diffdir.stats.RawDeltaSize == 0:
+            return
+
+        # Snapshot current values for progress
+        last_progress_estimation = tracker.progress_estimation
+
+        if tracker.is_full:
+            # Compute mean ratio of data transfer, assuming 1:1 data density
+            tracker.current_estimation = float(tracker.total_bytecount) / float(total_changes)
+        else:
+            # Compute mean ratio of data transfer, estimating unknown progress
+            change_ratio = float(tracker.total_bytecount) / float(diffdir.stats.RawDeltaSize)
+            change_delta = change_ratio - tracker.change_mean_ratio
+            tracker.change_mean_ratio += change_delta / float(tracker.nsteps)  # mean cumulated ratio
+            tracker.change_r_estimation += change_delta * (change_ratio - tracker.change_mean_ratio)
+            change_sigma = math.sqrt(math.fabs(tracker.change_r_estimation / float(tracker.nsteps)))
+
+            u"""
+            Combine variables for progress estimation
+            Fit a smoothed curve that covers the most common data density distributions,
+            aiming for a large number of incremental changes.
+            The computation is:
+                Use 50% confidence interval lower bound during first half of the progression.
+                Conversely, use 50% C.I. upper bound during the second half. Scale it to the
+                changes/total ratio
+            """
+            tracker.current_estimation = float(changes) / float(total_changes) * (
+                (tracker.change_mean_ratio - 0.67 * change_sigma) * (1.0 - tracker.current_estimation) +
+                (tracker.change_mean_ratio + 0.67 * change_sigma) * tracker.current_estimation
+            )
+            u"""
+            In case that we overpassed the 100%, drop the confidence and trust more the mean as the
+            sigma may be large.
+            """
+            if tracker.current_estimation > 1.0:
+                tracker.current_estimation = float(changes) / float(total_changes) * (
+                    (tracker.change_mean_ratio - 0.33 * change_sigma) * (1.0 - tracker.current_estimation) +
+                    (tracker.change_mean_ratio + 0.33 * change_sigma) * tracker.current_estimation
+                )
+            u"""
+            Meh!, if again overpassed the 100%, drop the confidence to 0 and trust only the mean.
+            """
+            if tracker.current_estimation > 1.0:
+                tracker.current_estimation = tracker.change_mean_ratio * float(changes) / float(total_changes)
+
+        u"""
+        Lastly, just cap it... nothing else we can do to approximate it better.
+        Cap it to 99%, as the remaining 1% to 100% we reserve for the last step
+        uploading of signature and manifests
+        """
+        tracker.progress_estimation = max(0.0, min(tracker.prev_estimation +
+                                                (1.0 - tracker.prev_estimation) *
+                                                tracker.current_estimation, 0.99))
+
+        u"""
+        Estimate the time just as a projection of the remaining time, fit to a
+        [(1 - x) / x] curve
+        """
+        # As sum of timedeltas, so as to avoid clock skew in long runs
+        # (adding also microseconds)
+        tracker.elapsed_sum += elapsed
+        projection = 1.0
+        if tracker.progress_estimation > 0:
+            projection = (1.0 - tracker.progress_estimation) / tracker.progress_estimation
+        tracker.time_estimation = int(projection * float(tracker.elapsed_sum.total_seconds()))
+
+        # Apply values only when monotonic, so the estimates look more consistent to the human eye
+        if tracker.progress_estimation < last_progress_estimation:
+            tracker.progress_estimation = last_progress_estimation
+
+        u"""
+        Compute Exponential Moving Average of speed as bytes/sec of the last 30 probes
+        """
+        if elapsed.total_seconds() > 0:
+            tracker.transfers.append(float(tracker.total_bytecount - tracker.last_total_bytecount) /
+                                  float(elapsed.total_seconds()))
+        tracker.last_total_bytecount = tracker.total_bytecount
+        if len(tracker.transfers) > 30:
+            tracker.transfers.popleft()
+        tracker.speed = 0.0
+        for x in tracker.transfers:
+            tracker.speed = 0.3 * x + 0.7 * tracker.speed
+
+        return (100.0 * tracker.progress_estimation,
+                             tracker.time_estimation,
+                             tracker.total_bytecount,
+                             (current_time - tracker.start_time).seconds,
+                             tracker.speed,
+                             False
+                             )
+
+    def run(self):
+
+        while not self.isInterruptionRequested():
+            if self.handler.tracker:
+                data = self.progress()
+                print(data)
+                self.sendProgress.emit(100)
+
+            self.msleep(1000)
 
 
 class RecoveryWorker(QtCore.QThread):

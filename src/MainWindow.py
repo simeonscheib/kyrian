@@ -12,7 +12,8 @@ from kyrian.settings_window import SettingsWindow
 from kyrian.actionHandler import actionHandler
 from kyrian.workers import (BackupWorker,
                            TreeWorker,
-                           RecoveryWorker)
+                           RecoveryWorker,
+                           ProgressWorker)
 
 
 class MainWindow(QtWidgets.QMainWindow):
@@ -37,6 +38,7 @@ class MainWindow(QtWidgets.QMainWindow):
         self.backup_worker = BackupWorker(self.a)
         self.tree_worker = TreeWorker(self.a)
         self.recovery_worker = RecoveryWorker(self.a)
+        self.progress_worker = ProgressWorker(self.a)
 
         self.make_backup_list()
 
@@ -69,7 +71,12 @@ class MainWindow(QtWidgets.QMainWindow):
 
         self.actionHighlight_Differences.toggled.connect(self.set_hl)
 
+        self.progress_worker.sendProgress.connect(self.test)
+
         self.resize(self.screen().availableSize() * 0.7)
+
+    def test(self, i):
+        print(i)
 
     def make_backup_list(self):
         """Add all available backup chains to list
@@ -117,9 +124,12 @@ class MainWindow(QtWidgets.QMainWindow):
         self.backup_worker.backupReady.connect(self.post_backup)
         self.backup_worker.start()
 
+        self.progress_worker.start()
+
     def post_backup(self):
         """Remake the chain list after backup and enable buttons
         """
+        self.progress_worker.requestInterruption()
         self.backup_worker.backupReady.disconnect()
         self.make_backup_list()
         self.listWidget.setCurrentRow(0)
