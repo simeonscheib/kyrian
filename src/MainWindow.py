@@ -22,6 +22,7 @@ class MainWindow(QtWidgets.QMainWindow):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         uic.loadUi(os.path.join(os.path.dirname(__file__), "ui/mw.ui"), self)
+        self.setWindowTitle("Kyrian")
 
         # New actionHandler
         self.a = actionHandler(os.path.expanduser("~/.config/kyrian/"))

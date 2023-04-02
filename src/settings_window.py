@@ -14,6 +14,7 @@ class SettingsWindow(QtWidgets.QWidget):
     def __init__(self, handler, *args, **kwargs):
         super().__init__(*args, **kwargs)
         uic.loadUi(os.path.join(os.path.dirname(__file__), "ui/settings.ui"), self)
+        self.setWindowTitle("Settings")
 
         self.handler = handler
 
