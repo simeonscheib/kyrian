@@ -9,6 +9,9 @@ from duplicity import config
 from duplicity import diffdir
 from duplicity import commandline
 from duplicity import log
+from duplicity import progress
+
+from datetime import datetime, timedelta
 
 
 class BackupWorker(QtCore.QThread):
@@ -41,10 +44,10 @@ class ProgressWorker(QtCore.QThread):
     sendProgress = QtCore.pyqtSignal(int)
 
     def progress(self):
-        u"""
+        u""" Adapted from https://gitlab.com/duplicity/duplicity
         Aproximative and evolving method of computing the progress of upload
         """
-        tracker = self.handler.tracker
+        tracker = progress.tracker
         if not tracker.has_collected_evidence():
             return
 
@@ -61,13 +64,12 @@ class ProgressWorker(QtCore.QThread):
         if tracker.stall_last_time is None:
             tracker.stall_last_time = current_time
         if (current_time - tracker.stall_last_time).seconds > max(5, 2 * config.progress_rate):
-            log.TransferProgress(100.0 * tracker.progress_estimation,
+            return (100.0 * tracker.progress_estimation,
                                  tracker.time_estimation, tracker.total_bytecount,
                                  (current_time - tracker.start_time).seconds,
                                  tracker.speed,
                                  True
                                  )
-            return
 
         tracker.nsteps += 1
 
@@ -175,15 +177,17 @@ class ProgressWorker(QtCore.QThread):
                              )
 
     def run(self):
+        """check on progress
+        """
 
         while not self.isInterruptionRequested():
-            if self.handler.tracker:
+            if progress.tracker:
                 data = self.progress()
-                print(data)
-                self.sendProgress.emit(100)
+                self.sendProgress.emit(int(data[0]))
 
-            self.msleep(1000)
+            self.sleep(config.progress_rate)
 
+        self.sendProgress.emit(100)
 
 class RecoveryWorker(QtCore.QThread):
     """Make Recovery in seperate thread

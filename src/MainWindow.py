@@ -77,6 +77,7 @@ class MainWindow(QtWidgets.QMainWindow):
 
     def test(self, i):
         print(i)
+        self.progressBar.setValue(i)
 
     def make_backup_list(self):
         """Add all available backup chains to list
@@ -124,6 +125,7 @@ class MainWindow(QtWidgets.QMainWindow):
         self.backup_worker.backupReady.connect(self.post_backup)
         self.backup_worker.start()
 
+        print("Starting progress worker")
         self.progress_worker.start()
 
     def post_backup(self):

@@ -39,6 +39,12 @@ def with_tempdir_opts(fn, opts):
         tempdir.default().cleanup()
 
 
+class DummyThread():
+
+    def start(self):
+        print("Started Dummy")
+
+
 class actionHandler():
     """Calls duplicity and returns relevant information
     """
@@ -74,8 +80,7 @@ class actionHandler():
         if not os.path.exists(self.config_dir):
             os.makedirs(self.config_dir)
         
-
-        self.tracker = ProgressTracker()
+        self.tracker = None
 
         # Read config of create minimal config
         try:
@@ -407,47 +412,19 @@ class actionHandler():
                         log.ErrorCode.user_error)
 
             if action == u"full":
-                if self.tracker:
-                    # Fake a backup to compute total of moving bytes
-                    tarblock_iter = diffdir.DirFull(config.select)
-                    dummy_backup(tarblock_iter)
-                    # Store computed stats to compute progress later
-                    self.tracker.set_evidence(diffdir.stats, True)
-                    # Reinit the config.select iterator, so
-                    # the core of duplicity can rescan the paths
-                    commandline.set_selection()
-                full_backup(col_stats)
+                self.full_backup(col_stats)
             else:  # attempt incremental
                 sig_chain = check_sig_chain(col_stats)
                 # action == "inc" was requested, but no full backup is available
                 if not sig_chain:
-                    if self.tracker:
-                        # Fake a backup to compute total of moving bytes
-                        tarblock_iter = diffdir.DirFull(config.select)
-                        dummy_backup(tarblock_iter)
-                        # Store computed stats to compute progress later
-                        self.tracker.set_evidence(diffdir.stats, True)
-                        # Reinit the config.select iterator, so
-                        # the core of duplicity can rescan the paths
-                        commandline.set_selection()
-                    full_backup(col_stats)
+                    self.full_backup(col_stats)
                 else:
                     if not config.restart:
                         # only ask for a passphrase if there was a previous backup
                         if col_stats.all_backup_chains:
                             config.gpg_profile.passphrase = get_passphrase(1, action)
                             check_last_manifest(col_stats)  # not needed for full backups
-                        
-                        if self.tracker:
-                            # Fake a backup to compute total of moving bytes
-                            tarblock_iter = diffdir.DirDelta(config.select,
-                                                            sig_chain.get_fileobjs())
-                            dummy_backup(tarblock_iter)
-                            # Store computed stats to compute progress later
-                            self.tracker.set_evidence(diffdir.stats, False)
-                            # Reinit the config.select iterator, so
-                            # the core of duplicity can rescan the paths
-                            commandline.set_selection()
+
                     incremental_backup(sig_chain)
         config.backend.close()
         if exit_val is not None:
@@ -546,3 +523,120 @@ class actionHandler():
         #            _(u"%d difference(s) found") % diff_count))
         if diff_count >= 1:
             exit_val = 1
+
+    def full_backup(self, col_stats):
+        u"""
+        Do full backup of directory to backend, using archive_dir_path
+
+        @type col_stats: CollectionStatus object
+        @param col_stats: collection status
+
+        @rtype: void
+        @return: void
+        """
+        config.progress = True
+        if config.progress:
+            progress.tracker = progress.ProgressTracker()
+            # Fake a backup to compute total of moving bytes
+            tarblock_iter = diffdir.DirFull(config.select)
+            dummy_backup(tarblock_iter)
+            # Store computed stats to compute progress later
+            progress.tracker.set_evidence(diffdir.stats, True)
+            # Reinit the config.select iterator, so
+            # the core of duplicity can rescan the paths
+            commandline.set_selection()
+            progress.progress_thread = DummyThread()
+
+        if config.dry_run:
+            tarblock_iter = diffdir.DirFull(config.select)
+            bytes_written = dummy_backup(tarblock_iter)
+            col_stats.set_values(sig_chain_warning=None)
+        else:
+            sig_outfp = get_sig_fileobj(u"full-sig")
+            man_outfp = get_man_fileobj(u"full")
+            tarblock_iter = diffdir.DirFull_WriteSig(config.select,
+                                                    sig_outfp)
+            bytes_written = write_multivol(u"full", tarblock_iter,
+                                        man_outfp, sig_outfp,
+                                        config.backend)
+
+            # close sig file, send to remote, and rename to final
+            sig_outfp.close()
+            sig_outfp.to_remote()
+            sig_outfp.to_final()
+
+            # close manifest, send to remote, and rename to final
+            man_outfp.close()
+            man_outfp.to_remote()
+            man_outfp.to_final()
+
+            if config.progress:
+                # Terminate the background thread now, if any
+                log.TransferProgress(100.0, 0, progress.tracker.total_bytecount,
+                                    progress.tracker.total_elapsed_seconds(),
+                                    progress.tracker.speed, False)
+
+            col_stats.set_values(sig_chain_warning=None)
+
+        print_statistics(diffdir.stats, bytes_written)
+
+    def incremental_backup(sig_chain):
+        u"""
+        Do incremental backup of directory to backend, using archive_dir_path
+
+        @rtype: void
+        @return: void
+        """
+        config.progress = True
+        if not config.restart:
+            dup_time.setprevtime(sig_chain.end_time)
+            if dup_time.curtime == dup_time.prevtime:
+                time.sleep(2)
+                dup_time.setcurtime()
+                assert dup_time.curtime != dup_time.prevtime, \
+                    u"time not moving forward at appropriate pace - system clock issues?"
+
+        if config.progress:
+            progress.tracker = progress.ProgressTracker()
+            # Fake a backup to compute total of moving bytes
+            tarblock_iter = diffdir.DirDelta(config.select,
+                                            sig_chain.get_fileobjs())
+            dummy_backup(tarblock_iter)
+            # Store computed stats to compute progress later
+            progress.tracker.set_evidence(diffdir.stats, False)
+            # Reinit the config.select iterator, so
+            # the core of duplicity can rescan the paths
+            commandline.set_selection()
+            progress.progress_thread = DummyThread()
+
+        if config.dry_run:
+            tarblock_iter = diffdir.DirDelta(config.select,
+                                            sig_chain.get_fileobjs())
+            bytes_written = dummy_backup(tarblock_iter)
+        else:
+            new_sig_outfp = get_sig_fileobj(u"new-sig")
+            new_man_outfp = get_man_fileobj(u"inc")
+            tarblock_iter = diffdir.DirDelta_WriteSig(config.select,
+                                                    sig_chain.get_fileobjs(),
+                                                    new_sig_outfp)
+            bytes_written = write_multivol(u"inc", tarblock_iter,
+                                        new_man_outfp, new_sig_outfp,
+                                        config.backend)
+
+            # close sig file and rename to final
+            new_sig_outfp.close()
+            new_sig_outfp.to_remote()
+            new_sig_outfp.to_final()
+
+            # close manifest and rename to final
+            new_man_outfp.close()
+            new_man_outfp.to_remote()
+            new_man_outfp.to_final()
+
+            if config.progress:
+                log.TransferProgress(100.0, 0, progress.tracker.total_bytecount,
+                                    progress.tracker.total_elapsed_seconds(),
+                                    progress.tracker.speed, False)
+
+        print_statistics(diffdir.stats, bytes_written)
+
