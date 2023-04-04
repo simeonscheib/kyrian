@@ -466,19 +466,9 @@ class actionHandler():
         if not time:
             time = config.restore_time or dup_time.curtime
         sig_chain = col_stats.get_signature_chain_at_time(time)
-        path_iter = diffdir.get_combined_path_iter(sig_chain.get_fileobjs(time))
-        paths_l = []
-        for path_i in path_iter:
-            if path_i.difftype != u"deleted":
-                # user_info = u"%s %s" % (dup_time.timetopretty(path.getmtime()),
-                #                        util.fsdecode(path.get_relative_path()))
-                # log_info = u"%s %s %s" % (dup_time.timetostring(path.getmtime()),
-                #                        util.escape(path.get_relative_path()),
-                #                        path.type)
-                paths_l.append((path_i.getmtime(), path_i.get_relative_path(), path_i.type))
-                # log.Log(user_info, log.INFO, log.InfoCode.file_list,
-                #        log_info, True)
-        self.current_paths = paths_l
+        self.current_paths = diffdir.get_combined_path_iter(
+                                sig_chain.get_fileobjs(time)
+                                )
 
     def verify(self, col_stats):
         """Adapted from https://gitlab.com/duplicity/duplicity/

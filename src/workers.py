@@ -197,9 +197,15 @@ class TreeWorker(QtCore.QThread):
         self.safe = True
 
         # tl = self.make_tree_item(f[0])
-
-        for i in f[1:]:
-            self.make_tree_item(i, self.root)
+        next(f)
+        for i in f:
+            if i.difftype != u"deleted":
+                self.make_tree_item(
+                    (
+                        i.getmtime(),
+                        i.get_relative_path(),
+                        i.type),
+                    self.root)
 
         self.root = None
 
