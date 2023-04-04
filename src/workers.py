@@ -196,7 +196,6 @@ class TreeWorker(QtCore.QThread):
             self.diff_l = self.handler.get_diff(time=self.time)
         self.safe = True
 
-        # tl = self.make_tree_item(f[0])
         next(f)
         for i in f:
             if i.difftype != u"deleted":
