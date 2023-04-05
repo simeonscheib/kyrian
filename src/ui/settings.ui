@@ -6,8 +6,8 @@
    <rect>
     <x>0</x>
     <y>0</y>
-    <width>880</width>
-    <height>653</height>
+    <width>1021</width>
+    <height>791</height>
    </rect>
   </property>
   <property name="windowTitle">
@@ -129,8 +129,8 @@
        <rect>
         <x>0</x>
         <y>0</y>
-        <width>860</width>
-        <height>463</height>
+        <width>1001</width>
+        <height>601</height>
        </rect>
       </property>
       <layout class="QVBoxLayout" name="verticalLayout">
@@ -188,9 +188,31 @@
           </widget>
          </item>
          <item row="3" column="1">
-          <widget class="QListWidget" name="listWidgetExclude"/>
+          <widget class="QListWidget" name="listWidgetExclude">
+           <property name="sizePolicy">
+            <sizepolicy hsizetype="Expanding" vsizetype="MinimumExpanding">
+             <horstretch>0</horstretch>
+             <verstretch>0</verstretch>
+            </sizepolicy>
+           </property>
+           <property name="verticalScrollBarPolicy">
+            <enum>Qt::ScrollBarAlwaysOff</enum>
+           </property>
+           <property name="sizeAdjustPolicy">
+            <enum>QAbstractScrollArea::AdjustToContents</enum>
+           </property>
+           <property name="autoScroll">
+            <bool>true</bool>
+           </property>
+           <property name="alternatingRowColors">
+            <bool>false</bool>
+           </property>
+           <property name="resizeMode">
+            <enum>QListView::Fixed</enum>
+           </property>
+          </widget>
          </item>
-         <item row="4" column="1">
+         <item row="5" column="1">
           <spacer name="verticalSpacer">
            <property name="orientation">
             <enum>Qt::Vertical</enum>
@@ -206,14 +228,14 @@
            </property>
           </spacer>
          </item>
-         <item row="5" column="0">
+         <item row="6" column="0">
           <widget class="QLabel" name="labelEncrypt">
            <property name="text">
             <string>Encrypt?</string>
            </property>
           </widget>
          </item>
-         <item row="5" column="1">
+         <item row="6" column="1">
           <widget class="QCheckBox" name="checkBoxEncrypt">
            <property name="toolTip">
             <string>Encrypt the Backup?</string>
@@ -223,14 +245,14 @@
            </property>
           </widget>
          </item>
-         <item row="6" column="0">
+         <item row="7" column="0">
           <widget class="QLabel" name="labelAgent">
            <property name="text">
             <string>Use GPG Agent?</string>
            </property>
           </widget>
          </item>
-         <item row="6" column="1">
+         <item row="7" column="1">
           <widget class="QCheckBox" name="checkBoxAgent">
            <property name="toolTip">
             <string>Use gpg-agent to avoid password for encryption key</string>
@@ -240,31 +262,31 @@
            </property>
           </widget>
          </item>
-         <item row="7" column="0">
+         <item row="8" column="0">
           <widget class="QLabel" name="labelFingerprint">
            <property name="text">
             <string>GPG Fingerprint</string>
            </property>
           </widget>
          </item>
-         <item row="7" column="1">
+         <item row="8" column="1">
           <widget class="QLineEdit" name="lineEditFingerprint">
            <property name="toolTip">
             <string>Enter the Fingerprint of the pgp-key to use for encryption</string>
            </property>
           </widget>
          </item>
-         <item row="8" column="0">
+         <item row="9" column="0">
           <widget class="QLabel" name="labelSignFingerprint">
            <property name="text">
             <string>GPG Sign Fingerprint</string>
            </property>
           </widget>
          </item>
-         <item row="8" column="1">
+         <item row="9" column="1">
           <widget class="QLineEdit" name="lineEditSignFingerprint"/>
          </item>
-         <item row="9" column="1">
+         <item row="10" column="1">
           <spacer name="verticalSpacer_2">
            <property name="orientation">
             <enum>Qt::Vertical</enum>
@@ -276,6 +298,79 @@
             </size>
            </property>
           </spacer>
+         </item>
+         <item row="4" column="1">
+          <widget class="QWidget" name="excludeButtonContainer" native="true">
+           <layout class="QHBoxLayout" name="horizontalLayout">
+            <item>
+             <widget class="QWidget" name="widget_3" native="true">
+              <layout class="QGridLayout" name="gridLayout">
+               <property name="leftMargin">
+                <number>0</number>
+               </property>
+               <property name="topMargin">
+                <number>0</number>
+               </property>
+               <property name="rightMargin">
+                <number>0</number>
+               </property>
+               <property name="bottomMargin">
+                <number>0</number>
+               </property>
+               <property name="spacing">
+                <number>0</number>
+               </property>
+               <item row="0" column="0">
+                <widget class="QPushButton" name="incToggle">
+                 <property name="text">
+                  <string>--include</string>
+                 </property>
+                 <property name="checkable">
+                  <bool>true</bool>
+                 </property>
+                 <property name="autoExclusive">
+                  <bool>false</bool>
+                 </property>
+                </widget>
+               </item>
+               <item row="0" column="1">
+                <widget class="QPushButton" name="excToggle">
+                 <property name="text">
+                  <string>--exclude</string>
+                 </property>
+                 <property name="checkable">
+                  <bool>true</bool>
+                 </property>
+                 <property name="checked">
+                  <bool>true</bool>
+                 </property>
+                 <property name="autoExclusive">
+                  <bool>false</bool>
+                 </property>
+                </widget>
+               </item>
+              </layout>
+             </widget>
+            </item>
+            <item>
+             <widget class="QLineEdit" name="lineEditIncExc"/>
+            </item>
+            <item>
+             <widget class="QPushButton" name="addIncExc">
+              <property name="text">
+               <string>+</string>
+              </property>
+             </widget>
+            </item>
+            <item>
+             <widget class="QPushButton" name="remIncExc">
+              <property name="text">
+               <string>-</string>
+              </property>
+             </widget>
+            </item>
+           </layout>
+          </widget>
          </item>
         </layout>
        </item>

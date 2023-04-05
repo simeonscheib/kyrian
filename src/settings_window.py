@@ -27,6 +27,20 @@ class SettingsWindow(QtWidgets.QWidget):
         self.ApplyButton.pressed.connect(self.apply_settings)
         self.CancelButton.pressed.connect(self.close)
         self.addProfileButton.pressed.connect(self.add_profile)
+        self.addIncExc.pressed.connect(self.add_include_exclude)
+
+        self.buttonGroupINcExc = QtWidgets.QButtonGroup()
+        self.buttonGroupINcExc.setExclusive(True)
+        self.buttonGroupINcExc.addButton(self.incToggle)
+        self.buttonGroupINcExc.addButton(self.excToggle)
+
+        toggle_width = max(self.incToggle.width(), self.excToggle.width())
+        self.incToggle.setMinimumWidth(toggle_width)
+        self.excToggle.setMinimumWidth(toggle_width)
+
+        self.listWidgetExclude.setDragDropMode(
+            QtWidgets.QAbstractItemView.DragDropMode.InternalMove
+            )
 
         self.resize(self.screen().availableSize() * 0.5)
 
@@ -68,6 +82,14 @@ class SettingsWindow(QtWidgets.QWidget):
         if "use-agent" in profile_d.keys() and profile_d["use-agent"]:
             self.checkBoxAgent.setCheckState(Qt.CheckState.Checked)
 
+        self.listWidgetExclude.clear()
+
+        if "selection-flags" in profile_d.keys():
+            for flag in profile_d["selection-flags"]:
+                self.listWidgetExclude.addItem(
+                    self.make_editable_list_item(flag)
+                )
+
     def change_profile(self, text):
         """Triggered if profile is changed
 
@@ -99,6 +121,21 @@ class SettingsWindow(QtWidgets.QWidget):
         self.get_profile_list()
         self.profileChooser.setCurrentText(text)
 
+    def make_editable_list_item(self, text) -> QtWidgets.QListWidgetItem:
+        item = QtWidgets.QListWidgetItem(text)
+        item.setFlags(item.flags() | QtCore.Qt.ItemFlag.ItemIsEditable)
+        return item
+
+    def add_include_exclude(self) -> None:
+        incexctype = None
+        if self.incToggle.isChecked():
+            incexctype = "--include "
+        else:
+            incexctype = "--exclude "
+
+        item = self.make_editable_list_item(incexctype + self.lineEditIncExc.text())
+        self.listWidgetExclude.addItem(item)
+
     def apply_settings(self):
         """Apply the settings to the handler-config.
         """
@@ -112,6 +149,12 @@ class SettingsWindow(QtWidgets.QWidget):
         tmp["encrypt-sign-key"] = self.lineEditSignFingerprint.text()
         tmp["use-agent"] = self.checkBoxAgent.isChecked()
         tmp["encrypt"] = self.checkBoxEncrypt.isChecked()
+
+        tmp["selection-flags"] = []
+        for i in range(self.listWidgetExclude.count()):
+            tmp["selection-flags"].append(
+                self.listWidgetExclude.item(i).text()
+                )
 
         self.handler.save_config()
 
