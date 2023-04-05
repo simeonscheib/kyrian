@@ -323,7 +323,7 @@ class MainWindow(QtWidgets.QMainWindow):
                     self.tree_worker.files_l
                     )
             
-            if not prev.data(Qt.ItemDataRole.UserRole+3):
+            if prev.data(Qt.ItemDataRole.UserRole+3) == None:
                 prev.setData(
                     Qt.ItemDataRole.UserRole+3,
                     self.tree_worker.diff_l

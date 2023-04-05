@@ -12,7 +12,7 @@ class BackupWorker(QtCore.QThread):
     """Make Backups in seperate thread
     """
 
-    def __init__(self, handler, *args, **kwargs):
+    def __init__(self, handler, *args, **kwargs) -> None:
         super().__init__(*args, **kwargs)
 
         self.handler = handler
@@ -21,7 +21,7 @@ class BackupWorker(QtCore.QThread):
 
     backupReady = QtCore.pyqtSignal()
 
-    def run(self):
+    def run(self) -> None:
         self.safe = False
         self.handler.make_backup()
         self.safe = True
@@ -32,7 +32,7 @@ class RecoveryWorker(QtCore.QThread):
     """Make Recovery in seperate thread
     """
 
-    def __init__(self, handler, *args, **kwargs):
+    def __init__(self, handler, *args, **kwargs) -> None:
         super().__init__(*args, **kwargs)
 
         self.handler = handler
@@ -47,7 +47,7 @@ class RecoveryWorker(QtCore.QThread):
 
     recoveryReady = QtCore.pyqtSignal()
 
-    def run(self):
+    def run(self) -> None:
 
         local_path = path.Path(path.Path(self.dest).get_canonical())
         if ((local_path.exists() and not local_path.isemptydir())
@@ -74,7 +74,7 @@ class TreeWorker(QtCore.QThread):
 
     file_icon_p = QtWidgets.QFileIconProvider()
 
-    def __init__(self, handler, *args, **kwargs):
+    def __init__(self, handler, *args, **kwargs) -> None:
         super().__init__(*args, **kwargs)
 
         self.handler = handler
@@ -182,13 +182,25 @@ class TreeWorker(QtCore.QThread):
     def setItemColor(self,
                      item: QtWidgets.QTreeWidgetItem,
                      color: QtGui.QColor) -> None:
+        """Set the color of a tree item
+
+        :param item: The item
+        :type item: QtWidgets.QTreeWidgetItem
+        :param color: The color
+        :type color: QtGui.QColor
+        """
         item.setForeground(0, QtGui.QBrush(color))
         item.setData(0,
                     Qt.ItemDataRole.ForegroundRole,
                     QtGui.QBrush(color)
                     )
 
-    def highlight_leaf(self, path_s, ftype):
+    def highlight_leaf(self, path_s, ftype) -> None:
+        """Highlight every element of a relative path in the tree
+
+        :param path_s: path
+        :param ftype: File type
+        """
         # Elements of the path string
         path_elements = path_s.split("/")
 
@@ -202,12 +214,14 @@ class TreeWorker(QtCore.QThread):
                     self.setItemColor(parent, QtGui.QColor(255, 0, 0))
                     break
 
-    def cleanup(self):
+    def cleanup(self) -> None:
+        """Clean up afterwards
+        """
         self.root = None
 
         self.treeReady.emit()
 
-    def run(self):
+    def run(self) -> None:
         """Build the data-tree 
         """
         if not self.time:
@@ -219,8 +233,7 @@ class TreeWorker(QtCore.QThread):
 
             # Skip "."
             next(self.files_l)
-        if self.highlight_diffs and self.diff_l == None:
-            self.diff_l = self.handler.get_diff(time=self.time)
+
         self.safe = True
 
         if not self.files_l:
@@ -240,6 +253,11 @@ class TreeWorker(QtCore.QThread):
                 self.cleanup()
                 return
         
+        if self.highlight_diffs and self.diff_l == None:
+            self.safe = False
+            self.diff_l = self.handler.get_diff(time=self.time)
+            self.safe = True
+
         if self.highlight_diffs and not self.isInterruptionRequested():
             for i in self.diff_l:
                 self.highlight_leaf(i, self.diff_l[i])
