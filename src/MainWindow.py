@@ -33,6 +33,7 @@ class MainWindow(QtWidgets.QMainWindow):
         # Config for MainWindow
         self.config = {}
         self.config["highlight_diffs"] = False
+        self.config["build_tree"] = False
 
         # Setup workers
         self.backup_worker = BackupWorker(self.a)
@@ -41,7 +42,7 @@ class MainWindow(QtWidgets.QMainWindow):
 
         self.make_backup_list()
 
-        self.listWidget.itemSelectionChanged.connect(self.build_tree)
+        self.listWidget.currentItemChanged.connect(self.build_tree)
         self.listWidget.setCurrentRow(0)
 
         # Setup treeMenu
@@ -69,14 +70,13 @@ class MainWindow(QtWidgets.QMainWindow):
         self.settingsWindow.applied.connect(self.make_backup_list)
 
         self.actionHighlight_Differences.toggled.connect(self.set_hl)
+        self.actionData_Tree.toggled.connect(self.set_tree)
 
         self.resize(self.screen().availableSize() * 0.7)
 
-    def make_backup_list(self):
+    def make_backup_list(self) -> None:
         """Add all available backup chains to list
         """
-        self.listWidget.clear()
-
         chain_d = self.a.get_chains()
 
         for i in reversed(sorted(chain_d)):
@@ -84,12 +84,12 @@ class MainWindow(QtWidgets.QMainWindow):
             last_item = self.listWidget.item(self.listWidget.count()-1)
             last_item.setData(Qt.ItemDataRole.UserRole, i)
 
-    def open_settings(self):
+    def open_settings(self) -> None:
         """Show the settings window
         """
         self.settingsWindow.show()
 
-    def disable_buttons(self, b_disable=True):
+    def disable_buttons(self, b_disable: bool = True) -> None:
         """Disable buttons
 
         :param b_disable: disable?, defaults to True
@@ -99,7 +99,7 @@ class MainWindow(QtWidgets.QMainWindow):
         self.actionRestore.setEnabled(not b_disable)
         self.recovAction.setEnabled(not b_disable)
 
-    def start_backup(self):
+    def start_backup(self) -> None:
         """Start a new backup in a seperate thread
         """
 
@@ -118,15 +118,20 @@ class MainWindow(QtWidgets.QMainWindow):
         self.backup_worker.backupReady.connect(self.post_backup)
         self.backup_worker.start()
 
-    def post_backup(self):
+    def post_backup(self) -> None:
         """Remake the chain list after backup and enable buttons
         """
         self.backup_worker.backupReady.disconnect()
-        self.make_backup_list()
+        chain_d = self.a.get_chains()
+        key = sorted(chain_d.keys())[-1]
+            
+        self.listWidget.insertItem(0,
+                " ".join([chain_d[key][1], chain_d[key][0]])
+                )
         self.listWidget.setCurrentRow(0)
         self.disable_buttons(False)
 
-    def contextMenuTree(self, i):
+    def contextMenuTree(self, i) -> None:
         """Open context Menu on tree item
 
         :param i: Coordinates in the reference frame of the tree
@@ -134,7 +139,7 @@ class MainWindow(QtWidgets.QMainWindow):
         """
         self.treeMenu.exec(self.treeWidget.mapToGlobal(i))
 
-    def recoverSelectedFiles(self):
+    def recoverSelectedFiles(self) -> None:
         """Recover a selcted file or folder from the data-tree
         """
 
@@ -205,7 +210,7 @@ class MainWindow(QtWidgets.QMainWindow):
             self.recovery_worker.recoveryReady.connect(self.post_file_recovery)
             self.recovery_worker.start()
 
-    def restore_snap(self):
+    def restore_snap(self) -> None:
         """Restores whole snapshot
         """
         # Disable buttons to prevent two duplicity instances from running
@@ -272,14 +277,16 @@ class MainWindow(QtWidgets.QMainWindow):
             self.recovery_worker.recoveryReady.connect(self.post_file_recovery)
             self.recovery_worker.start()
 
-    def post_file_recovery(self):
+    def post_file_recovery(self) -> None:
         """After recovery is finnished clean up and enable buttons
         """
         self.recovery_worker.recoveryReady.disconnect()
         config.force = False
         self.disable_buttons(False)
 
-    def build_tree(self):
+    def build_tree(self,
+                   item: QtWidgets.QTreeWidgetItem,
+                   prev: QtWidgets.QTreeWidgetItem) -> None:
         """Build the data tree of the backup contents
         """
         if not self.backup_worker.safe:
@@ -295,12 +302,51 @@ class MainWindow(QtWidgets.QMainWindow):
 
         if self.tree_worker.isRunning():
             # self.tree_worker.treeReady.disconnect()
-            self.tree_worker.terminate()
-            self.tree_worker.wait()
+            
+            self.tree_worker.requestInterruption()
+            self.tree_worker.wait(5000)
+            if self.tree_worker.isRunning():
+                print("terminating")
+                self.tree_worker.terminate()
+                self.tree_worker.wait()
 
-        self.treeWidget.clear()
+        if prev:
+            if not prev.data(Qt.ItemDataRole.UserRole+1):
+                prev.setData(
+                    Qt.ItemDataRole.UserRole+1,
+                    QtWidgets.QTreeWidgetItem()
+                    )
 
-        item = self.listWidget.selectedItems()[0]
+            if not prev.data(Qt.ItemDataRole.UserRole+2):
+                prev.setData(
+                    Qt.ItemDataRole.UserRole+2,
+                    self.tree_worker.files_l
+                    )
+            
+            if not prev.data(Qt.ItemDataRole.UserRole+3):
+                prev.setData(
+                    Qt.ItemDataRole.UserRole+3,
+                    self.tree_worker.diff_l
+                    )
+                
+            prev.data(Qt.ItemDataRole.UserRole+1).addChildren(
+                    self.treeWidget.invisibleRootItem().takeChildren()
+                )
+
+            if item.data(Qt.ItemDataRole.UserRole+1):
+                self.treeWidget.invisibleRootItem().addChildren(
+                        item.data(Qt.ItemDataRole.UserRole+1).takeChildren()
+                    )
+        else:
+            item.setData(Qt.ItemDataRole.UserRole+2, self.tree_worker.files_l)
+            item.setData(Qt.ItemDataRole.UserRole+3, self.tree_worker.diff_l)
+
+        self.tree_worker.files_l = item.data(Qt.ItemDataRole.UserRole+2)
+        self.tree_worker.diff_l = item.data(Qt.ItemDataRole.UserRole+3)
+
+        if not self.config["build_tree"]:
+            return
+
         time = item.data(Qt.ItemDataRole.UserRole)
 
         self.tree_worker.time = time
@@ -313,16 +359,42 @@ class MainWindow(QtWidgets.QMainWindow):
         self.tree_worker.safe = False
         self.tree_worker.start()
 
-    def post_tree(self):
+    def post_tree(self) -> None:
         """After building the tree cleanup
         """
         self.tree_worker.treeReady.disconnect()
 
-    def set_hl(self, b):
+    def set_hl(self, b: bool) -> None:
         """Toggle the highlight config option
 
         :param b: check state of action
         :type b: bool
         """
         self.config["highlight_diffs"] = b
-        self.build_tree()
+        self.build_tree(self.listWidget.selectedItems()[0], None)
+
+    def set_tree(self, b: bool) -> None:
+        """Toggle the tree creation config option
+
+        :param b: check state of action
+        :type b: bool
+        """
+        self.config["build_tree"] = b
+        if b:
+            self.build_tree(self.listWidget.selectedItems()[0], None)
+
+    def closeEvent(self, a0: QtGui.QCloseEvent) -> None:
+
+        if self.tree_worker.isRunning():
+            # self.tree_worker.treeReady.disconnect()
+            
+            self.tree_worker.requestInterruption()
+            self.tree_worker.wait(5000)
+            if self.tree_worker.isRunning():
+                print("terminating")
+                self.tree_worker.terminate()
+                self.tree_worker.wait()
+
+        a0.accept()
+
+        return super().closeEvent(a0)

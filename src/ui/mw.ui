@@ -6,9 +6,15 @@
    <rect>
     <x>0</x>
     <y>0</y>
-    <width>1044</width>
-    <height>803</height>
+    <width>917</width>
+    <height>606</height>
    </rect>
+  </property>
+  <property name="minimumSize">
+   <size>
+    <width>500</width>
+    <height>300</height>
+   </size>
   </property>
   <property name="windowTitle">
    <string>MainWindow</string>
@@ -54,7 +60,7 @@
     <rect>
      <x>0</x>
      <y>0</y>
-     <width>1044</width>
+     <width>917</width>
      <height>22</height>
     </rect>
    </property>
@@ -68,6 +74,7 @@
      <string>Edit</string>
     </property>
     <addaction name="actionSettings"/>
+    <addaction name="separator"/>
    </widget>
    <addaction name="menuEdit"/>
    <addaction name="menuAbout"/>
@@ -88,31 +95,20 @@
    <addaction name="actionBackup"/>
    <addaction name="actionRestore"/>
    <addaction name="separator"/>
+   <addaction name="actionData_Tree"/>
    <addaction name="actionHighlight_Differences"/>
   </widget>
   <action name="actionSettings">
-   <property name="icon">
-    <iconset theme="preferences-system">
-     <normaloff>.</normaloff>.</iconset>
-   </property>
    <property name="text">
     <string>Settings</string>
    </property>
   </action>
   <action name="actionBackup">
-   <property name="icon">
-    <iconset theme="network-server">
-     <normaloff>.</normaloff>.</iconset>
-   </property>
    <property name="text">
     <string>Backup</string>
    </property>
   </action>
   <action name="actionRestore">
-   <property name="icon">
-    <iconset theme="system-reboot">
-     <normaloff>.</normaloff>.</iconset>
-   </property>
    <property name="text">
     <string>Restore</string>
    </property>
@@ -126,6 +122,17 @@
    </property>
    <property name="toolTip">
     <string>Highlight differences between the source and the selected backup in the data-tree (may take some time)</string>
+   </property>
+  </action>
+  <action name="actionData_Tree">
+   <property name="checkable">
+    <bool>true</bool>
+   </property>
+   <property name="text">
+    <string>Data Tree</string>
+   </property>
+   <property name="toolTip">
+    <string>Show files in Backup as a tree. This may take some time for large Backups</string>
    </property>
   </action>
  </widget>

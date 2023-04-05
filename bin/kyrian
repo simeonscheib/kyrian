@@ -47,8 +47,6 @@ if __name__ == u"__main__":
         log.setup()
         util.start_debugger()
 
-        # with_tempdir(alt_main, ["collection-status", "file://to"])
-
         app = QtWidgets.QApplication(sys.argv)
         apply_stylesheet(app, theme='dark_lightgreen.xml')
 
