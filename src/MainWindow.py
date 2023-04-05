@@ -7,6 +7,7 @@ from PyQt6.QtCore import Qt
 from PyQt6 import uic
 
 from duplicity import config
+from duplicity import commandline
 
 from kyrian.settings_window import SettingsWindow
 from kyrian.actionHandler import actionHandler
@@ -116,7 +117,24 @@ class MainWindow(QtWidgets.QMainWindow):
             self.tree_worker.wait()
 
         self.backup_worker.backupReady.connect(self.post_backup)
+        self.backup_worker.finished.connect(self.on_backup_worker_exit)
         self.backup_worker.start()
+
+    def on_backup_worker_exit(self):
+        self.backup_worker.finished.disconnect()
+        self.disable_buttons(False)
+        
+        if self.backup_worker.sys_exit:
+            error_m = QtWidgets.QErrorMessage(self)
+            if self.backup_worker.sys_exit == 14:
+                error_m.showMessage("The duplicity backup-thread failed with exit code: "
+                                + str(self.backup_worker.sys_exit)
+                                + "\nPlease check your include/exclude settings.")
+            else:
+                error_m.showMessage("The duplicity backup-thread failed with exit code: "
+                                + str(self.backup_worker.sys_exit))
+            
+            self.backup_worker.sys_exit = None
 
     def post_backup(self) -> None:
         """Remake the chain list after backup and enable buttons
@@ -129,7 +147,7 @@ class MainWindow(QtWidgets.QMainWindow):
                 " ".join([chain_d[key][1], chain_d[key][0]])
                 )
         self.listWidget.setCurrentRow(0)
-        self.disable_buttons(False)
+        
 
     def contextMenuTree(self, i) -> None:
         """Open context Menu on tree item
@@ -385,6 +403,12 @@ class MainWindow(QtWidgets.QMainWindow):
 
     def closeEvent(self, a0: QtGui.QCloseEvent) -> None:
 
+        if self.backup_worker.isRunning():
+            self.backup_worker.terminate()
+
+        if self.recovery_worker.isRunning():
+            self.recovery_worker.terminate()
+
         if self.tree_worker.isRunning():
             # self.tree_worker.treeReady.disconnect()
             
@@ -394,6 +418,9 @@ class MainWindow(QtWidgets.QMainWindow):
                 print("terminating")
                 self.tree_worker.terminate()
                 self.tree_worker.wait()
+
+        self.backup_worker.wait()
+        self.recovery_worker.wait()
 
         a0.accept()
 

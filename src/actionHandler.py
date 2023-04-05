@@ -142,7 +142,7 @@ class actionHandler():
         finally:
             util.release_lockfile()
 
-    def add_args_from_cfg(self, args):
+    def add_args_from_cfg(self, args: list) -> list:
         """Add general flags to the list of arguments
            depending on configuration
 
@@ -167,6 +167,16 @@ class actionHandler():
                                 ]
         else:
             args = args + ["--no-encryption"]
+
+        return args
+
+    def add_include_exclude(self, args: list) -> list:
+
+        profile_cfg = self.config["Profiles"][self.current_profile]
+
+        if "selection-flags" in profile_cfg.keys():
+             for flag in profile_cfg["selection-flags"]:
+                args = args + flag.split(" ")
 
         return args
 
@@ -270,6 +280,7 @@ class actionHandler():
         """
         args = []
         args = self.add_args_from_cfg(args)
+        args = self.add_include_exclude(args)
 
         args = args + [self.config["Profiles"][self.current_profile]["Source"]]
         args = args + [self.config["Profiles"][self.current_profile]["Target"]]

@@ -6,6 +6,7 @@ from PyQt6.QtCore import Qt
 from duplicity import dup_time
 from duplicity import path
 from duplicity import config
+from duplicity import commandline
 
 
 class BackupWorker(QtCore.QThread):
@@ -19,11 +20,22 @@ class BackupWorker(QtCore.QThread):
 
         self.safe = True
 
+        self.sys_exit = None
+
     backupReady = QtCore.pyqtSignal()
 
     def run(self) -> None:
+        # Clear select options !!!
+        commandline.select_opts = []
         self.safe = False
-        self.handler.make_backup()
+        try:
+            self.handler.make_backup()
+        except SystemExit as e:
+            self.sys_exit = e.code
+            self.safe = True
+            return
+        except Exception as e:
+            raise e
         self.safe = True
         self.backupReady.emit()
 

@@ -159,3 +159,4 @@ class SettingsWindow(QtWidgets.QWidget):
         self.handler.save_config()
 
         self.applied.emit()
+        self.close()
