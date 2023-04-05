@@ -12,7 +12,7 @@ class BackupWorker(QtCore.QThread):
     """Make Backups in seperate thread
     """
 
-    def __init__(self, handler, *args, **kwargs):
+    def __init__(self, handler, *args, **kwargs) -> None:
         super().__init__(*args, **kwargs)
 
         self.handler = handler
@@ -21,7 +21,7 @@ class BackupWorker(QtCore.QThread):
 
     backupReady = QtCore.pyqtSignal()
 
-    def run(self):
+    def run(self) -> None:
         self.safe = False
         self.handler.make_backup()
         self.safe = True
@@ -32,7 +32,7 @@ class RecoveryWorker(QtCore.QThread):
     """Make Recovery in seperate thread
     """
 
-    def __init__(self, handler, *args, **kwargs):
+    def __init__(self, handler, *args, **kwargs) -> None:
         super().__init__(*args, **kwargs)
 
         self.handler = handler
@@ -47,7 +47,7 @@ class RecoveryWorker(QtCore.QThread):
 
     recoveryReady = QtCore.pyqtSignal()
 
-    def run(self):
+    def run(self) -> None:
 
         local_path = path.Path(path.Path(self.dest).get_canonical())
         if ((local_path.exists() and not local_path.isemptydir())
@@ -74,10 +74,13 @@ class TreeWorker(QtCore.QThread):
 
     file_icon_p = QtWidgets.QFileIconProvider()
 
-    def __init__(self, handler, *args, **kwargs):
+    def __init__(self, handler, *args, **kwargs) -> None:
         super().__init__(*args, **kwargs)
 
         self.handler = handler
+
+        # List of files and direcories
+        self.files_l = None
 
         # List of differing files and direcories
         self.diff_l = None
@@ -134,27 +137,27 @@ class TreeWorker(QtCore.QThread):
             else:
                 raise IndexError("Path too long to build root")
 
-        # True if file differs from source
-        diff = False
-
-        # Check if file is different
-        if self.highlight_diffs and path_s in self.diff_l.keys():
-            diff = True
-
         # Iterate path
         for i in path_elements:
 
             # Search existing folders
             found = False
-            for j in range(parent.childCount()):
-                if parent.child(j).data(0, 0) == i:
-                    parent = parent.child(j)
-                    found = True
-                    break
+            #for j in range(parent.childCount()):
+            #    if parent.child(j).data(0, 0) == i:
+            #        parent = parent.child(j)
+            #        found = True
+            #        break
+
+            # Assuming the generator sorts files correctly
+            # Only check the last child element
+            cc = parent.childCount()
+            if cc > 0 and parent.child(cc-1).data(0, 0) == i:
+                parent = parent.child(cc-1)
+                found = True
 
             if not found:
                 if path_elements[-1] != i:
-                    raise IndexError("Path broken")
+                    raise IndexError("Path broken " + i + " " + path_elements[-1] + " " + path_s)
 
                 tmp = QtWidgets.QTreeWidgetItem([i, dup_time.timetopretty(time)])
                 tmp.setData(0, Qt.ItemDataRole.UserRole, path_s)
@@ -173,32 +176,71 @@ class TreeWorker(QtCore.QThread):
                                     )
                                 )
 
-                if diff:
-                    tmp.setForeground(0, QtGui.QBrush(QtGui.QColor(255, 0, 0)))
-                    tmp.setData(0,
-                                Qt.ItemDataRole.ForegroundRole,
-                                QtGui.QBrush(QtGui.QColor(255, 0, 0))
-                                )
-
                 parent.addChild(tmp)
                 break
 
-    def run(self):
+    def setItemColor(self,
+                     item: QtWidgets.QTreeWidgetItem,
+                     color: QtGui.QColor) -> None:
+        """Set the color of a tree item
+
+        :param item: The item
+        :type item: QtWidgets.QTreeWidgetItem
+        :param color: The color
+        :type color: QtGui.QColor
+        """
+        item.setForeground(0, QtGui.QBrush(color))
+        item.setData(0,
+                    Qt.ItemDataRole.ForegroundRole,
+                    QtGui.QBrush(color)
+                    )
+
+    def highlight_leaf(self, path_s, ftype) -> None:
+        """Highlight every element of a relative path in the tree
+
+        :param path_s: path
+        :param ftype: File type
+        """
+        # Elements of the path string
+        path_elements = path_s.split("/")
+
+        parent = self.root
+
+        # Iterate path
+        for i in path_elements:
+            for j in range(parent.childCount()):
+                if parent.child(j).data(0, 0) == i:
+                    parent = parent.child(j)
+                    self.setItemColor(parent, QtGui.QColor(255, 0, 0))
+                    break
+
+    def cleanup(self) -> None:
+        """Clean up afterwards
+        """
+        self.root = None
+
+        self.treeReady.emit()
+
+    def run(self) -> None:
         """Build the data-tree 
         """
         if not self.time:
-            self.treeReady.emit(None)
+            self.treeReady.emit()
 
         self.safe = False
-        f = self.handler.get_files(time=self.time)
+        if not self.files_l:
+            self.files_l = self.handler.get_files(time=self.time)
 
-        if self.highlight_diffs:
-            self.diff_l = self.handler.get_diff(time=self.time)
+            # Skip "."
+            next(self.files_l)
+
         self.safe = True
 
-        # tl = self.make_tree_item(f[0])
-        next(f)
-        for i in f:
+        if not self.files_l:
+            self.cleanup()
+            return
+
+        for i in self.files_l:
             if i.difftype != u"deleted":
                 self.make_tree_item(
                     (
@@ -207,6 +249,21 @@ class TreeWorker(QtCore.QThread):
                         i.type),
                     self.root)
 
-        self.root = None
+            if self.isInterruptionRequested():
+                self.cleanup()
+                return
+        
+        if self.highlight_diffs and self.diff_l == None:
+            self.safe = False
+            self.diff_l = self.handler.get_diff(time=self.time)
+            self.safe = True
 
-        self.treeReady.emit()
+        if self.highlight_diffs and not self.isInterruptionRequested():
+            for i in self.diff_l:
+                self.highlight_leaf(i, self.diff_l[i])
+
+                if self.isInterruptionRequested():
+                    self.cleanup()
+                    return
+
+

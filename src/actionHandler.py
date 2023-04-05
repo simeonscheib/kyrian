@@ -418,7 +418,7 @@ class actionHandler():
                     incremental_backup(sig_chain)
         config.backend.close()
         if exit_val is not None:
-            print(exit_val)
+            print("exit_val: ", exit_val)
 
     def get_chain_dict(self, col_stats):
         """Adapted from https://gitlab.com/duplicity/duplicity
@@ -496,10 +496,3 @@ class actionHandler():
                 diff_count += 1
                 self.diff_f_list[util.uindex(backup_ropath.index)] = backup_ropath.type
             total_count += 1
-        # Unfortunately, ngettext doesn't handle multiple number variables, so we
-        # split up the string.
-        #log.Notice(_(u"Verify complete: %s, %s.") %
-        #        (_(u"%d file(s) compared") % total_count,
-        #            _(u"%d difference(s) found") % diff_count))
-        if diff_count >= 1:
-            exit_val = 1
